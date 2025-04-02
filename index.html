@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style_01.css">
+</head>
+<body style="background-color: grey;">
+    <div class="sidebar">
+        <h1>Ttitolo</h1>
+        <a href="Home.html" onclick="saveDataAndNavigate('Home.html'); return false;">Home</a>
+        <a href="ElencoVolontari.html" onclick="saveDataAndNavigate('ElencoVolontari.html'); return false;">Elenco Volontari</a>
+        <a href="ElencoSoci.html" onclick="saveDataAndNavigate('ElencoSoci.html'); return false;">Elenco Soci</a>
+        <a href="Bilancio.html" onclick="saveDataAndNavigate('Bilancio.html'); return false;">Bilancio</a>
+        <a href="Patrimonio.html" onclick="saveDataAndNavigate('Patrimonio.html'); return false;">Patrimonio</a>
+    </div>
+    <div class="container">
+        <div class="inner-container">
+        <div class="logo-titolo-container">
+            <img id="logoPreview" class="logo-preview" src="" alt="Logo" onclick="document.getElementById('logoUpload').click();"> 
+            <input type="file" id="logoUpload" style="display: none;" accept="image/*" onchange="previewLogo(event);">
+        <div></div>
+            <input type="text" id="title" class="title" placeholder="Titolo"> 
+        <div></div>
+            <p id="companyName" class="text-gray-700">Nome della società</p>
+            <p id="address" class="text-gray-700">Indirizzo</p>
+            <p id="city" class="text-gray-700">Città</p>
+            <p id="cf" class="text-gray-700">Codice Fiscale</p> 
+            <p id="vat" class="text-gray-700">P.IVA</p>
+            <p id="email" class="text-blue-600">Email</p> 
+            <p id="social" class="text-blue-500">Link Social</p>
+            <button id="apriModalButton" class="data-button">Inserisci Dati</button>
+         <div id="modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h2>Inserisci Dati</h2>
+                <input type="text" class="modal-content input" id="modalCompanyName" placeholder="Nome della società">
+                <input type="text" class="modal-content input" id="modalAddress" placeholder="Indirizzo">
+                <input type="text" class="modal-content input" id="modalCity" placeholder="Città">
+                <input type="text" class="modal-content input" id="modalCf" placeholder="Codice Fiscale">
+                <input type="text" class="modal-content input" id="modalVat" placeholder="Partita IVA">
+                <input type="email" class="modal-content input" id="modalEmail" placeholder="Email">
+                <input type="text" class="modal-content input" id="modalSocial" placeholder="Link Social" class="modal-social-input">
+            <div>
+                <div class="modal-buttons button">
+                            <button id="chiudiModalButton" class="modal-buttons button:first-child">Annulla</button>
+                            <button id="saveDataButton" class="modal-buttons button:last-child">Salva</button>         
+    </div>
+    <script>
+        let db;
+        const request = indexedDB.open('myDataDB', 1);
+
+        request.onerror = function(event) {
+            console.error('Database error:', event.target.errorCode);
+        };
+
+        request.onupgradeneeded = function(event) {
+            db = event.target.result;
+            const objectStore = db.createObjectStore('data', { keyPath: 'id' });
+        };
+
+        request.onsuccess = function(event) {
+            db = event.target.result;
+            loadData();
+        };
+
+        function saveData() {
+            const transaction = db.transaction(['data'], 'readwrite');
+            const objectStore = transaction.objectStore('data');
+            const data = {
+                id: 1,
+                companyName: document.getElementById('companyName').innerText,
+                address: document.getElementById('address').innerText,
+                city: document.getElementById('city').innerText,
+                cf: document.getElementById('cf').innerText,
+                vat: document.getElementById('vat').innerText,
+                email: document.getElementById('email').innerText,
+                social: document.getElementById('social').innerText,
+                logo: document.getElementById('logoPreview').src,
+                title: document.getElementById('title').value,
+            };
+            objectStore.put(data);
+        }
+
+        function loadData() {
+            const transaction = db.transaction(['data'], 'readonly');
+            const objectStore = transaction.objectStore('data');
+            const request = objectStore.get(1);
+            request.onsuccess = function(event) {
+                const data = event.target.result;
+                if (data) {
+                    document.getElementById('companyName').innerText = data.companyName;
+                    document.getElementById('address').innerText = data.address;
+                    document.getElementById('city').innerText = data.city;
+                    document.getElementById('cf').innerText = data.cf;
+                    document.getElementById('vat').innerText = data.vat;
+                    document.getElementById('email').innerText = data.email;
+                    document.getElementById('social').innerText = data.social;
+                    document.getElementById('logoPreview').src = data.logo;
+                    document.getElementById('title').value = data.title;
+                }
+            };
+        }
+
+        function saveDataAndNavigate(url) {
+            saveData();
+            window.location.href = url;
+        }
+
+        const modal = document.getElementById('modal');
+        const apriModalButton = document.getElementById('apriModalButton');
+        const chiudiModalButton = document.getElementById('chiudiModalButton');
+        const saveDataButton = document.getElementById('saveDataButton');
+
+        apriModalButton.onclick = function() {
+            modal.style.display = 'block';
+        };
+
+        chiudiModalButton.onclick = function() {
+            modal.style.display = 'none';
+        };
+
+        saveDataButton.onclick = function() {
+            document.getElementById('companyName').innerText = document.getElementById('modalCompanyName').value;
+            document.getElementById('address').innerText = document.getElementById('modalAddress').value;
+            document.getElementById('city').innerText = document.getElementById('modalCity').value;
+            document.getElementById('cf').innerText = document.getElementById('modalCf').value;
+            document.getElementById('vat').innerText = document.getElementById('modalVat').value;
+            document.getElementById('email').innerText = document.getElementById('modalEmail').value;
+            document.getElementById('social').innerText = document.getElementById('modalSocial').value;
+            modal.style.display = 'none';
+            saveData();
+        };
+
+        function previewLogo(event) {
+            const reader = new FileReader();
+            reader.onload = function () {
+                document.getElementById('logoPreview').src = reader.result;
+                saveData();
+            };
+            reader.readAsDataURL(event.target.files[0]);
+        }
+    </script>
+</body>
+</html>

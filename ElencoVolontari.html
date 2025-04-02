@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elenco Volontari</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="sidebar">
+        <h1>Titolo</h1>
+        <a href="index.html">Home</a>
+        <a href="ElencoVolontari.html">Elenco Volontari</a>
+        <a href="ElencoSoci.html">Elenco Soci</a>
+        <a href="Bilancio.html">Bilancio</a>
+        <a href="Patrimonio.html">Patrimonio</a>
+    </div>
+    <div class="content">
+        <header>
+            <input type="file" id="fileInput" accept="image/*" onchange="previewImage()">
+            <img id="headerImage" src="https://via.placeholder.com/40" alt="Logo" onclick="document.getElementById('fileInput').click();">
+            <h1>Elenco Volontari</h1>
+        </header>
+        <div class="form-section1">
+            <div class="form-group">
+                <label for="data">Data:</label>
+                <input type="date" id="data">
+            </div>
+            <div class="form-group">
+                <label for="tessera">Tessera:</label>
+                <input type="text" id="tessera" name="tessera">
+            </div>
+            <div class="form-group">
+                <label for="cognome">Cognome:</label>
+                <input type="text" id="cognome" name="cognome">
+            </div>
+            <div class="form-group">
+                <label for="nome">Nome:</label>
+                <input type="text" id="nome" name="nome">
+            </div>
+            <div class="form-group">
+                <label for="indirizzo">Indirizzo:</label>
+                <input type="text" id="indirizzo" name="indirizzo">
+            </div>
+            <div class="form-group">
+                <label for="codicepostale">Codice Postale:</label>
+                <input type="text" id="codicepostale" name="codicepostale">
+            </div>
+            <div class="form-group">
+                <label for="comune">Comune:</label>
+                <input type="text" id="comune" name="comune">
+            </div>
+            <div class="form-group">
+                <label for="città">Città:</label>
+                <input type="text" id="città" name="città">
+            </div>
+            <button onclick="aggiungiVolontari()">Aggiungi Volontario</button>
+            <button onclick="esportaInExcel()">Esporta in Excel</button> 
+        </div>
+        <table id="elencoVolontari">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Tessera</th>
+                <th>Cognome</th>
+                <th>Nome</th>
+                <th>Indirizzo</th>
+                <th>Codice Postale</th>
+                <th>Comune</th>
+                <th>Città</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <style>
+            table {
+              margin-bottom: 20px;
+            }
+            button {
+              margin-top: 20px;
+            }
+          </style>
+        </div>
+    </div>
+    <script>
+        let db;
+        let request = indexedDB.open('volontariDB', 1);
+
+        request.onerror = function(event) {
+            console.error('Database error:', event.target.errorCode);
+        };
+
+        request.onupgradeneeded = function(event) {
+            db = event.target.result;
+            if (!db.objectStoreNames.contains('volontari')) {
+                db.createObjectStore('volontari', { autoIncrement: true });
+            }
+            if (!db.objectStoreNames.contains('pagina')) {
+                db.createObjectStore('pagina', { keyPath: 'id' });
+            }
+        };
+
+        request.onsuccess = function(event) {
+            db = event.target.result;
+            loadData();
+        };
+
+        function loadData() {
+            loadVolontari();
+            loadPagina();
+        }
+
+        function loadVolontari() {
+            const transaction = db.transaction(['volontari'], 'readonly');
+            const objectStore = transaction.objectStore('volontari');
+            objectStore.getAll().onsuccess = function(event) {
+                volontari = event.target.result || [];
+                aggiornaElencoVolontari();
+            };
+        }
+
+        function loadPagina() {
+            const transaction = db.transaction(['pagina'], 'readonly');
+            const objectStore = transaction.objectStore('pagina');
+            objectStore.get(1).onsuccess = function(event) {
+                const pagina = event.target.result;
+                if (pagina) {
+                    document.getElementById('headerImage').src = pagina.headerImage;
+                }
+            };
+        }
+
+        let volontari = [];
+
+        // Funzione per aggiungere un socio
+        function aggiungiVolontari() {
+            const data = document.getElementById('data').value;
+            const tessera = document.getElementById('tessera').value;
+            const cognome = document.getElementById('cognome').value;
+            const nome = document.getElementById('nome').value;
+            const indirizzo = document.getElementById('indirizzo').value;
+            const codicepostale = document.getElementById('codicepostale').value;
+            const comune = document.getElementById('comune').value;
+            const città = document.getElementById('città').value;
+
+            if (!data || !cognome || !nome || !indirizzo || !codicepostale || !comune || !città) {
+                alert('Per favore, compila tutti i campi correttamente.');
+                return;
+            }
+
+            const transaction = db.transaction(['volontari'], 'readwrite');
+            const objectStore = transaction.objectStore('volontari');
+            objectStore.add({ data, tessera, cognome, nome, indirizzo, codicepostale, comune, città }).onsuccess = function() {
+                loadVolontari();
+            };
+        }
+
+        // Funzione per aggiornare l'elenco dei soci
+        function aggiornaElencoVolontari() {
+            const elencoVolontari = document.getElementById('elencoVolontari').getElementsByTagName('tbody')[0];
+            elencoVolontari.innerHTML = '';
+
+            volontari.forEach((volontario, index) => {
+                const row = elencoVolontari.insertRow();
+                row.innerHTML = `
+                    <td>${volontario.data}</td>
+                    <td>${volontario.tessera}</td>
+                    <td>${volontario.cognome}</td>
+                    <td>${volontario.nome}</td>
+                    <td>${volontario.indirizzo}</td>
+                    <td>${volontario.codicepostale}</td>
+                    <td>${volontario.comune}</td>
+                    <td>${volontario.città}</td>
+                    <td><button onclick="eliminaVolontari(${index})">Elimina</button></td>
+                `;
+            });
+        }
+
+        // Funzione per eliminare un socio
+        function eliminaVolontari(index) {
+            const transaction = db.transaction(['volontari'], 'readwrite');
+            const objectStore = transaction.objectStore('volontari');
+            const request = objectStore.openCursor();
+            let i = 0;
+            request.onsuccess = function(event) {
+                const cursor = event.target.result;
+                if (cursor) {
+                    if (i === index) {
+                        cursor.delete().onsuccess = function() {
+                            loadVolontari();
+                        };
+                    } else {
+                        i++;
+                        cursor.continue();
+                    }
+                }
+            };
+        }
+
+        // Funzione per visualizzare l'immagine caricata
+        function previewImage() {
+            const fileInput = document.getElementById('fileInput');
+            const headerImage = document.getElementById('headerImage');
+
+            const file = fileInput.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    headerImage.src = e.target.result;
+                    savePagina();
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function savePagina() {
+            const transaction = db.transaction(['pagina'], 'readwrite');
+            const objectStore = transaction.objectStore('pagina');
+            objectStore.put({ id: 1, headerImage: document.getElementById('headerImage').src });
+        }
+
+        window.onload = () => {
+            loadData();
+        };
+
+        function esportaInExcel() {
+            const datiVolontari = volontari.map(volontario => {
+                return {
+                    Data: volontario.data,
+                    Tessera: volontario.tessera,
+                    Cognome: volontario.cognome,
+                    Nome: volontario.nome,
+                    indirizzo: volontario.indirizzo,
+                    CodicePostale: volontario.codicepostale,
+                    Comune: volontario.comune,
+                    Città: volontario.città,
+                };
+            });
+
+            const ws = XLSX.utils.json_to_sheet(datiVolontari);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Volontari');
+            XLSX.writeFile(wb, 'Elenco_Volontari.xlsx');
+        }
+    </script>
+</body>
+</html>

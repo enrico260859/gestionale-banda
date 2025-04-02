@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patrimonio</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="sidebar">
+        <h1>Titolo</h1>
+        <a href="index.html">Home</a>
+        <a href="ElencoVolontari.html">Elenco Volontari</a>
+        <a href="ElencoSoci.html">Elenco Soci</a>
+        <a href="Bilancio.html">Bilancio</a>
+        <a href="Patrimonio.html">Patrimonio</a>
+    </div>
+    
+    <div class="content">
+        <header>
+            <input type="file" id="fileInput" accept="image/*" onchange="previewImage()">
+            <img id="headerImage" src="https://via.placeholder.com/40" alt="Logo" onclick="document.getElementById('fileInput').click();">
+            <h1>Patrimonio</h1>
+        </header>
+        <div class="form-section1">
+            <div class="form-group">
+                <label for="data">Data:</label>
+                <input type="date" id="data">
+            </div>
+            <div class="form-group">
+                <label for="numero">Numero:</label>
+                <input type="text" id="numero" name="numero">
+            </div>
+            <div class="form-group">
+                <label for="desrizione">Descrizione:</label>
+                <input type="text" id="descrizione" name="descrizione">
+            </div>
+            <div class="form-group">
+                <label for="importo">Importo:</label>
+                <input type="number" id="importo" name="importo">
+            </div>
+            <div class="form-group">
+                <label for="note">Note:</label>
+                <input type="text" id="note" name="note">
+            </div>
+            <div class="totals">
+                <span>Totale Patrimonio: <span id="totalePatrimonio">0</span> €</span>
+            </div>
+            <button onclick="aggiungiPatrimonio()">Aggiungi Patrimonio</button>
+            <button onclick="esportaInExcel()">Esporta in Excel</button> 
+        </div>    
+        <table id="elencoPatrimonio">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Numero</th>
+                <th>Descrizione</th>
+                <th>Importo</th>
+                <th>Note</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <style>
+            table {
+              margin-bottom: 20px;
+            }
+            button {
+              margin-top: 20px;
+            }
+          </style>
+        </div>
+    </div>
+    <script>
+        let db;
+        let request = indexedDB.open('patrimonioDB', 1);
+
+        request.onerror = function(event) {
+            console.error('Database error:', event.target.errorCode);
+        };
+
+        request.onupgradeneeded = function(event) {
+            db = event.target.result;
+            if (!db.objectStoreNames.contains('patrimonio')) {
+                db.createObjectStore('patrimonio', { autoIncrement: true });
+            }
+            if (!db.objectStoreNames.contains('pagina')) {
+                db.createObjectStore('pagina', { keyPath: 'id' });
+            }
+        };
+
+        request.onsuccess = function(event) {
+            db = event.target.result;
+            loadData();
+        };
+
+        function loadData() {
+            loadPatrimonio();
+            loadPagina();
+        }
+
+        function loadPatrimonio() {
+            const transaction = db.transaction(['patrimonio'], 'readonly');
+            const objectStore = transaction.objectStore('patrimonio');
+            objectStore.getAll().onsuccess = function(event) {
+                patrimonio = event.target.result || [];
+                aggiornaElencoPatrimonio();
+                aggiornaTotale();
+            };
+        }
+
+        function loadPagina() {
+            const transaction = db.transaction(['pagina'], 'readonly');
+            const objectStore = transaction.objectStore('pagina');
+            objectStore.get(1).onsuccess = function(event) {
+                const pagina = event.target.result;
+                if (pagina) {
+                    document.getElementById('headerImage').src = pagina.headerImage;
+                }
+            };
+        }
+
+        let patrimonio = [];
+        let totalePatrimonio = 0;
+
+        function aggiornaTotale() {
+            totalePatrimonio = patrimonio.reduce((acc, item) => acc + item.importo, 0);
+            document.getElementById('totalePatrimonio').textContent = totalePatrimonio.toFixed(2);
+        }
+
+        function aggiungiPatrimonio() {
+            const data = document.getElementById('data').value;
+            const numero = document.getElementById('numero').value;
+            const descrizione = document.getElementById('descrizione').value;
+            const importo = parseFloat(document.getElementById('importo').value);
+            const note = document.getElementById('note').value;
+
+            if (!data || !numero || !descrizione || isNaN(importo) || !note) {
+                alert('Per favore, compila tutti i campi correttamente.');
+                return;
+            }
+
+            const transaction = db.transaction(['patrimonio'], 'readwrite');
+            const objectStore = transaction.objectStore('patrimonio');
+            objectStore.add({ data, numero, descrizione, importo, note }).onsuccess = function() {
+                loadPatrimonio();
+            };
+        }
+
+        function aggiornaElencoPatrimonio() {
+            const elencoPatrimonio = document.getElementById('elencoPatrimonio').getElementsByTagName('tbody')[0];
+            elencoPatrimonio.innerHTML = '';
+
+            patrimonio.forEach((item, index) => {
+                const row = elencoPatrimonio.insertRow();
+                row.innerHTML = `
+                    <td>${item.data}</td>
+                    <td>${item.numero}</td>
+                    <td>${item.descrizione}</td>
+                    <td>${item.importo.toFixed(2)} €</td>
+                    <td>${item.note}</td>
+                    <td><button onclick="eliminaPatrimonio(${index})">Elimina</button></td>
+                `;
+            });
+        }
+
+        function eliminaPatrimonio(index) {
+            const transaction = db.transaction(['patrimonio'], 'readwrite');
+            const objectStore = transaction.objectStore('patrimonio');
+            const request = objectStore.openCursor();
+            let i = 0;
+            request.onsuccess = function(event) {
+                const cursor = event.target.result;
+                if (cursor) {
+                    if (i === index) {
+                        cursor.delete().onsuccess = function() {
+                            loadPatrimonio();
+                        };
+                    } else {
+                        i++;
+                        cursor.continue();
+                    }
+                }
+            };
+        }
+
+        function previewImage() {
+            const fileInput = document.getElementById('fileInput');
+            const headerImage = document.getElementById('headerImage');
+
+            const file = fileInput.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    headerImage.src = e.target.result;
+                    savePagina();
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function savePagina() {
+            const transaction = db.transaction(['pagina'], 'readwrite');
+            const objectStore = transaction.objectStore('pagina');
+            objectStore.put({ id: 1, headerImage: document.getElementById('headerImage').src });
+        }
+
+        window.onload = () => {
+            loadData();
+        };
+
+        function esportaInExcel() {
+            const datiPatrimonio = patrimonio.map(item => {
+                return {
+                    Data: item.data,
+                    Numero: item.numero,
+                    Descrizione: item.descrizione,
+                    Importo: item.importo,
+                    Note: item.note,
+                };
+            });
+
+            const ws = XLSX.utils.json_to_sheet(datiPatrimonio);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Patrimonio');
+            XLSX.writeFile(wb, 'Elenco_Patrimonio.xlsx');
+        }
+    </script>
+</body>
+</html>

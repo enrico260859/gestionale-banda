@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bilancio</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="sidebar">
+        <h1>Titolo</h1>
+        <a href="index.html">Home</a>
+        <a href="ElencoVolontari.html">Elenco Volontari</a>
+        <a href="ElencoSoci.html">Elenco Soci</a>
+        <a href="Bilancio.html">Bilancio</a>
+        <a href="Patrimonio.html">Patrimonio</a>
+    </div>
+    <div class="content">
+        <header>
+            <input type="file" id="fileInput" accept="image/*" onchange="previewImage()">
+            <img id="headerImage" src="https://via.placeholder.com/40" alt="Logo" onclick="document.getElementById('fileInput').click();">
+            <h1>Bilancio di Cassa</h1>
+          </header>
+        <div class="form-section">
+            <label for="data">Data:</label>
+            <input type="date" id="data">
+            
+            <label for="descrizione">Descrizione:</label>
+            <select id="descrizione"></select>
+            
+            <label for="tipo">Tipo:</label>
+            <select id="tipo">
+              <option value="entrata">Entrata</option>
+              <option value="uscita">Uscita</option>
+            </select>
+            <label for="tipo">CDC:</label>
+            <select id="CDC">
+              <option value="cassa">Cassa</option>
+              <option value="banca">Banca</option>
+            </select>
+            <label for="importo">Importo:</label>
+            <input type="number" id="importo" step="0.01">
+        </div>
+          <button onclick="aggiungiTransazione()">Aggiungi Transazione</button><br>
+          <button onclick="mostraCatalogoCategorie()">Gestisci Categorie</button><br>
+          <button onclick="esportaInExcel()">Esporta in Excel</button>
+          
+    <div class="totals">
+      <span>Entrate Totali: <span id="totaleEntrate">0</span> €</span>
+      <span>Uscite Totali: <span id="totaleUscite">0</span> €</span>
+      <span>Saldo: <span id="saldo">0</span> €</span>
+    </div>
+    <table id="elencoTransazioni">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Descrizione</th>
+          <th>Tipo</th>
+          <th>CDC</th>
+          <th>Importo</th>
+          <th>Azioni</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <style>
+      table {
+        margin-bottom: 20px;
+      }
+      button {
+        margin-top: 20px;
+      }
+    </style>
+    <div id="modalCategorie" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="chiudiCatalogoCategorie()">&times;</span>
+      <h2>Gestione Categorie e Sottocategorie</h2>
+      <div id="categorie"></div>
+      <button onclick="aggiungiCategoria()">Aggiungi Categoria</button>
+    </div>
+  </div>
+  <script>
+    let db;
+    let request = indexedDB.open('bilancioDB', 1);
+
+    request.onerror = function(event) {
+        console.error('Database error:', event.target.errorCode);
+    };
+
+    request.onupgradeneeded = function(event) {
+        db = event.target.result;
+        if (!db.objectStoreNames.contains('transazioni')) {
+            db.createObjectStore('transazioni', { autoIncrement: true });
+        }
+        if (!db.objectStoreNames.contains('categorie')) {
+            db.createObjectStore('categorie', { autoIncrement: true });
+        }
+        if (!db.objectStoreNames.contains('pagina')) {
+            db.createObjectStore('pagina', { keyPath: 'id' });
+        }
+    };
+
+    request.onsuccess = function(event) {
+        db = event.target.result;
+        loadData();
+    };
+
+    function loadData() {
+        loadTransazioni();
+        loadCategorie();
+        loadPagina();
+    }
+
+    function loadTransazioni() {
+        const transaction = db.transaction(['transazioni'], 'readonly');
+        const objectStore = transaction.objectStore('transazioni');
+        objectStore.getAll().onsuccess = function(event) {
+            transazioni = event.target.result || [];
+            aggiornaTotali();
+            aggiornaElencoTransazioni();
+        };
+    }
+
+    function loadCategorie() {
+        const transaction = db.transaction(['categorie'], 'readonly');
+        const objectStore = transaction.objectStore('categorie');
+        objectStore.getAll().onsuccess = function(event) {
+            categorie = event.target.result || [];
+            aggiornaCatalogoCategorie();
+        };
+    }
+
+    function loadPagina() {
+        const transaction = db.transaction(['pagina'], 'readonly');
+        const objectStore = transaction.objectStore('pagina');
+        objectStore.get(1).onsuccess = function(event) {
+            const pagina = event.target.result;
+            if (pagina) {
+                document.getElementById('headerImage').src = pagina.headerImage;
+            }
+        };
+    }
+
+    let transazioni = [];
+    let totaleEntrate = 0;
+    let totaleUscite = 0;
+    let categorie = [];
+
+    // Funzione per aggiornare i totali
+    function aggiornaTotali() {
+      totaleEntrate = transazioni.filter(t => t.tipo === 'entrata').reduce((acc, t) => acc + t.importo, 0);
+      totaleUscite = transazioni.filter(t => t.tipo === 'uscita').reduce((acc, t) => acc + t.importo, 0);
+      const saldo = totaleEntrate - totaleUscite;
+      document.getElementById('totaleEntrate').textContent = totaleEntrate.toFixed(2);
+      document.getElementById('totaleUscite').textContent = totaleUscite.toFixed(2);
+      document.getElementById('saldo').textContent = saldo.toFixed(2);
+    }
+
+    // Funzione per aggiungere una transazione
+    function aggiungiTransazione() {
+      const data = document.getElementById('data').value;
+      const descrizione = document.getElementById('descrizione').value;
+      const tipo = document.getElementById('tipo').value;
+      const CDC = document.getElementById('CDC').value;
+      const importo = parseFloat(document.getElementById('importo').value);
+
+      if (!data || !descrizione || isNaN(importo) || importo <= 0) {
+        alert('Per favore, compila tutti i campi correttamente.');
+        return;
+      }
+
+      const transaction = db.transaction(['transazioni'], 'readwrite');
+      const objectStore = transaction.objectStore('transazioni');
+      objectStore.add({ data, descrizione, tipo, CDC, importo }).onsuccess = function() {
+          loadTransazioni();
+      };
+    }
+
+    // Funzione per aggiornare l'elenco delle transazioni
+    function aggiornaElencoTransazioni() {
+      const elencoTransazioni = document.getElementById('elencoTransazioni').getElementsByTagName('tbody')[0];
+      elencoTransazioni.innerHTML = '';
+
+      transazioni.forEach((transazione, index) => {
+        const row = elencoTransazioni.insertRow();
+        row.innerHTML = `
+          <td>${transazione.data}</td>
+          <td>${transazione.descrizione}</td>
+          <td>${transazione.tipo}</td>
+          <td>${transazione.CDC}</td>
+          <td>${transazione.importo.toFixed(2)} €</td>
+          <td><button onclick="eliminaTransazione(${index})">Elimina</button></td>
+        `;
+      });
+    }
+
+    // Funzione per eliminare una transazione
+    function eliminaTransazione(index) {
+        const transaction = db.transaction(['transazioni'], 'readwrite');
+        const objectStore = transaction.objectStore('transazioni');
+        const request = objectStore.openCursor();
+        let i = 0;
+        request.onsuccess = function(event) {
+            const cursor = event.target.result;
+            if (cursor) {
+                if (i === index) {
+                    cursor.delete().onsuccess = function() {
+                        loadTransazioni();
+                    };
+                } else {
+                    i++;
+                    cursor.continue();
+                }
+            }
+        };
+    }
+
+    // Funzione per visualizzare l'immagine caricata
+    function previewImage() {
+      const fileInput = document.getElementById('fileInput');
+      const headerImage = document.getElementById('headerImage');
+      
+      const file = fileInput.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          headerImage.src = e.target.result;
+          savePagina();
+        }
+        reader.readAsDataURL(file);
+      }
+    }
+
+    function savePagina() {
+      const transaction = db.transaction(['pagina'], 'readwrite');
+      const objectStore = transaction.objectStore('pagina');
+      objectStore.put({ id: 1, headerImage: document.getElementById('headerImage').src });
+    }
+
+    // Funzione per mostrare/nascondere il catalogo categorie
+    function mostraCatalogoCategorie() {
+      const modal = document.getElementById('modalCategorie');
+      modal.style.display = "block";
+      aggiornaCatalogoCategorie();
+    }
+
+    // Funzione per chiudere la modale
+    function chiudiCatalogoCategorie() {
+      const modal = document.getElementById('modalCategorie');
+      modal.style.display = "none";
+    }
+
+    // Funzione per aggiornare la visualizzazione delle categorie e sottocategorie
+    function aggiornaCatalogoCategorie() {
+      const categorieDiv = document.getElementById('categorie');
+      categorieDiv.innerHTML = '';
+
+      const descrizioneSelect = document.getElementById('descrizione');
+      descrizioneSelect.innerHTML = '';
+
+      categorie.forEach((categoria, index) => {
+        const categoriaDiv = document.createElement('div');
+        categoriaDiv.className = 'categoria';
+        categoriaDiv.innerHTML = `
+          <strong>${categoria.nome}</strong>
+          <ul>
+            ${categoria.sottocategorie.map((sottocategoria, subIndex) => {
+              return `
+                <li>
+                  ${sottocategoria.nome}
+                  <ul>
+                    ${sottocategoria.sottosottocategorie.map(ssc => `<li>${ssc}</li>`).join('')}
+                  </ul>
+                  <button onclick="aggiungiSottosottocategoria(${index}, ${subIndex})">Aggiungi Sottosottocategoria</button>
+                </li>
+              `;
+            }).join('')}
+          </ul>
+          <button onclick="modificaCategoria(${index})">Modifica</button>
+          <button onclick="eliminaCategoria(${index})">Elimina</button>
+          <button onclick="aggiungiSottocategoria(${index})">Aggiungi Sottocategoria</button>
+        `;
+        categorieDiv.appendChild(categoriaDiv);
+
+        const option = document.createElement('option');
+        option.value = categoria.nome;
+        option.textContent = categoria.nome;
+        descrizioneSelect.appendChild(option);
+
+        categoria.sottocategorie.forEach(sottocategoria => {
+          const optionSottocategoria = document.createElement('option');
+          optionSottocategoria.value = sottocategoria.nome;
+          optionSottocategoria.textContent = `-- ${sottocategoria.nome}`;
+          descrizioneSelect.appendChild(optionSottocategoria);
+
+          sottocategoria.sottosottocategorie.forEach(sottosottocategoria => {
+            const optionSottosottocategoria = document.createElement('option');
+            optionSottosottocategoria.value = sottosottocategoria;
+            optionSottosottocategoria.textContent = `---- ${sottosottocategoria}`;
+            descrizioneSelect.appendChild(optionSottosottocategoria);
+          });
+        });
+      });
+    }
+
+    // Funzione per aggiungere una categoria
+    function aggiungiCategoria() {
+      const nomeCategoria = prompt('Nome della Categoria:');
+      if (nomeCategoria) {
+        const categoria = { nome: nomeCategoria, sottocategorie: [] };
+        const transaction = db.transaction(['categorie'], 'readwrite');
+        const objectStore = transaction.objectStore('categorie');
+        objectStore.add(categoria).onsuccess = function() {
+            loadCategorie();
+        };
+      }
+    }
+
+    // Funzione per aggiungere una sottocategoria
+    function aggiungiSottocategoria(categoriaIndex) {
+      const nomeSottocategoria = prompt('Nome della Sottocategoria:');
+      if (nomeSottocategoria) {
+        categorie[categoriaIndex].sottocategorie.push({ nome: nomeSottocategoria, sottosottocategorie: [] });
+        updateCategorieInDB();
+      }
+    }
+
+    // Funzione per aggiungere una sottosottocategoria
+    function aggiungiSottosottocategoria(categoriaIndex, sottocategoriaIndex) {
+      const nomeSottosottocategoria = prompt('Nome della Sottosottocategoria:');
+      if (nomeSottosottocategoria) {
+        categorie[categoriaIndex].sottocategorie[sottocategoriaIndex].sottosottocategorie.push(nomeSottosottocategoria);
+        updateCategorieInDB();
+      }
+    }
+
+    // Funzione per eliminare una categoria
+    function eliminaCategoria(index) {
+        const transaction = db.transaction(['categorie'], 'readwrite');
+        const objectStore = transaction.objectStore('categorie');
+        const request = objectStore.openCursor();
+        let i = 0;
+        request.onsuccess = function(event) {
+            const cursor = event.target.result;
+            if (cursor) {
+                if (i === index) {
+                    cursor.delete().onsuccess = function() {
+                        loadCategorie();
+                    };
+                } else {
+                    i++;
+                    cursor.continue();
+                }
+            }
+        };
+    }
+
+    // Funzione per modificare una categoria
+    function modificaCategoria(index) {
+      const nuovoNome = prompt('Nuovo nome della categoria:', categorie[index].nome);
+      if (nuovoNome) {
+        categorie[index].nome = nuovoNome;
+        updateCategorieInDB();
+      }
+    }
+    function updateCategorieInDB(){
+        const transaction = db.transaction(['categorie'], 'readwrite');
+        const objectStore = transaction.objectStore('categorie');
+        objectStore.clear();
+        categorie.forEach(categoria=> objectStore.add(categoria));
+        loadCategorie();
+    }
+    function esportaInExcel() {
+      const datiTransazioni = transazioni.map(transazione => {
+        return {
+          Data: transazione.data,
+          Descrizione: transazione.descrizione,
+          Tipo: transazione.tipo,
+          CDC: transazione.CDC,
+          Importo: transazione.importo.toFixed(2) + ' €'
+        };
+      });
+
+      datiTransazioni.push({
+        Data: 'Totali',
+        Descrizione: '',
+        Tipo: '',
+        CDC: '',
+        Importo: 'Entrate Totali: ' + totaleEntrate.toFixed(2) + ' € / Uscite Totali: ' + totaleUscite.toFixed(2) + ' € / Saldo: ' + (totaleEntrate - totaleUscite).toFixed(2) + ' €'
+      });
+
+      const ws = XLSX.utils.json_to_sheet(datiTransazioni);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Transazioni');
+      XLSX.writeFile(wb, 'Bilancio_di_Cassa.xlsx');
+    }
+  </script>
+</body>
+</html>
