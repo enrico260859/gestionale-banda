@@ -17,6 +17,7 @@ header {
   header h1 {
     display: inline;
     margin-left: 20px;
+    text-align: center;
   }
   .content {
     flex: 1;
